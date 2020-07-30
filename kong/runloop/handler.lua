@@ -91,7 +91,7 @@ do
     local time = ngx.time()
 
     if force or time - last >= LUA_MEM_SAMPLE_RATE then
-      local count = collectgarbage("count")
+      local count = collectgarbage("count") * 1024
 
       local ok, err = kong_shm:safe_set("kong:mem:" .. pid(), count)
       if not ok then

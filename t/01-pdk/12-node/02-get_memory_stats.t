@@ -436,3 +436,47 @@ GET /t
 workers_lua_vms\Z
 --- no_error_log
 [error]
+
+
+
+=== TEST 10: update_lua_mem converts count to bytes
+--- http_config eval
+qq{
+    $t::Util::HttpConfig
+
+    lua_shared_dict kong 24k;
+
+    init_worker_by_lua_block {
+        -- mock collectgarbage returning 1kb as total memory in use by the Lua VM
+        old_collect_garbage = collectgarbage
+        collectgarbage = function(opt)
+          if opt == "count" then return 1 end
+          return old_collect_garbage
+        end
+
+        local runloop_handler = require "kong.runloop.handler"
+        runloop_handler._update_lua_mem(true)
+    }
+}
+--- config
+    location = /t {
+        content_by_lua_block {
+            local PDK = require "kong.pdk"
+            local pdk = PDK.new()
+
+            local res = pdk.node.get_memory_stats()
+
+            ngx.say("workers_lua_vms")
+            for _, worker_info in ipairs(res.workers_lua_vms) do
+                ngx.say("  ", worker_info.pid, ": ",
+                        worker_info.http_allocated_gc or worker_info.err)
+            end
+        }
+    }
+--- request
+GET /t
+--- response_body_like chomp
+workers_lua_vms
+  (?:\d+: 1024\s*){1,2}\Z
+--- no_error_log
+[error]
